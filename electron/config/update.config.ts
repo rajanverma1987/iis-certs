@@ -4,6 +4,6 @@
  */
 export const UPDATE_FEED = {
   provider: 'github' as const,
-  owner: 'YOUR_GITHUB_OWNER',
-  repo: 'iis-cert-manager',
+  owner: 'rajanverma1987',
+  repo: 'iis-certs',
 };

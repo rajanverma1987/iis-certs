@@ -45,11 +45,9 @@ Installer output: `release/IIS Cert Manager-Setup-<version>.exe`
 
 ## Publish updates (GitHub Releases)
 
-1. Create a **public** GitHub repository for the app.
-2. Set the same `owner` / `repo` in:
-   - [`electron/config/update.config.ts`](electron/config/update.config.ts) (runtime update feed)
-   - `build.publish` in [`package.json`](package.json) (electron-builder publish)
-3. On Windows (or via the included GitHub Actions workflow):
+Updates publish to **https://github.com/rajanverma1987/iis-certs** (configured in `update.config.ts` and `package.json`).
+
+On Windows (or via the included GitHub Actions workflow):
 
 ```bash
 set GH_TOKEN=ghp_your_token

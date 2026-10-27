@@ -73,8 +73,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "YOUR_GITHUB_OWNER",
-        "repo": "iis-cert-manager",
+        "owner": "rajanverma1987",
+        "repo": "iis-certs",
         "releaseType": "release"
       }
     ]
