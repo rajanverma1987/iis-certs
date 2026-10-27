@@ -24,6 +24,7 @@ export function SitesPage() {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<JobProgressEvent[]>([]);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: 'idle' });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const needsSetup = !settings.contactEmail;
 
@@ -79,6 +80,18 @@ export function SitesPage() {
       ).length,
     [sites],
   );
+
+  const filteredSites = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sites;
+    return sites.filter((site) => {
+      if (site.name.toLowerCase().includes(q)) return true;
+      if (site.physicalPath.toLowerCase().includes(q)) return true;
+      if (site.hostnames.some((h) => h.toLowerCase().includes(q))) return true;
+      if (site.status.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [sites, searchQuery]);
 
   async function handleAction(site: ManagedSite) {
     setBusy(true);
@@ -174,51 +187,41 @@ export function SitesPage() {
               Add your Let&apos;s Encrypt contact email in Settings before requesting certificates.
             </div>
           )}
-          <div className="min-h-0 flex-1">
-            {loading ? (
-              <div className="flex h-full items-center justify-center rounded-xl border border-ink-700 bg-ink-900/50 text-ink-400">
-                Loading IIS sites…
-              </div>
-            ) : (
-              <SiteTable
-                sites={sites}
-                selectedId={selected?.id ?? null}
-                busy={busy || needsSetup}
-                onSelect={setSelected}
-                onAction={(site) => void handleAction(site)}
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="shrink-0">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search websites by name, hostname, or path…"
+                className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-50 outline-none ring-accent placeholder:text-ink-500 focus:ring-2"
+                disabled={loading}
               />
-            )}
+            </div>
+            <div className="min-h-0 flex-1">
+              {loading ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-ink-700 bg-ink-900/50 text-ink-400">
+                  Loading IIS sites…
+                </div>
+              ) : (
+                <SiteTable
+                  sites={filteredSites}
+                  selectedId={selected?.id ?? null}
+                  busy={busy || needsSetup}
+                  onSelect={setSelected}
+                  onAction={(site) => void handleAction(site)}
+                  emptyTitle={
+                    searchQuery.trim() ? 'No matching websites' : 'No IIS sites found'
+                  }
+                  emptyHint={
+                    searchQuery.trim()
+                      ? 'Try a different name, hostname, or path.'
+                      : 'Install IIS and create websites with hostname bindings, then refresh.'
+                  }
+                />
+              )}
+            </div>
           </div>
-
-          {selected && (
-            <section className="shrink-0 rounded-xl border border-ink-700/80 bg-ink-900/50 px-4 py-3 text-sm">
-              <h3 className="font-semibold text-ink-100">{selected.name}</h3>
-              <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                <div>
-                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Physical path</dt>
-                  <dd className="truncate font-mono text-xs text-ink-200" title={selected.physicalPath}>
-                    {selected.physicalPath}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Issuer</dt>
-                  <dd className="truncate text-ink-200">{selected.cert.issuer || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Subject</dt>
-                  <dd className="truncate text-ink-200">{selected.cert.subject || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Last run</dt>
-                  <dd className="text-ink-200">
-                    {selected.lastRunAt
-                      ? new Date(selected.lastRunAt).toLocaleString()
-                      : '—'}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          )}
         </div>
 
         <div className="min-h-0">

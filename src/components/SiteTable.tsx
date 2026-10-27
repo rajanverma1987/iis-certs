@@ -7,6 +7,8 @@ interface Props {
   busy: boolean;
   onSelect: (site: ManagedSite) => void;
   onAction: (site: ManagedSite) => void;
+  emptyTitle?: string;
+  emptyHint?: string;
 }
 
 function formatExpiry(site: ManagedSite): string {
@@ -18,15 +20,21 @@ function formatExpiry(site: ManagedSite): string {
   return `${date} (${days}d)`;
 }
 
-export function SiteTable({ sites, selectedId, busy, onSelect, onAction }: Props) {
+export function SiteTable({
+  sites,
+  selectedId,
+  busy,
+  onSelect,
+  onAction,
+  emptyTitle = 'No IIS sites found',
+  emptyHint = 'Install IIS and create websites with hostname bindings, then refresh.',
+}: Props) {
   if (sites.length === 0) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center rounded-xl border border-dashed border-ink-700 bg-ink-900/40 px-6 py-10 text-center">
         <div>
-          <p className="text-lg font-medium text-ink-100">No IIS sites found</p>
-          <p className="mt-2 text-sm text-ink-400">
-            Install IIS and create websites with hostname bindings, then refresh.
-          </p>
+          <p className="text-lg font-medium text-ink-100">{emptyTitle}</p>
+          <p className="mt-2 text-sm text-ink-400">{emptyHint}</p>
         </div>
       </div>
     );

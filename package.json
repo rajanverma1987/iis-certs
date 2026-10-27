@@ -1,9 +1,9 @@
 {
   "name": "iis-cert-manager",
-  "version": "1.0.2",
-  "description": "Let's Encrypt certificate manager for IIS (Certify-like Electron app)",
+  "version": "1.0.3",
+  "description": "Let's Encrypt certificate manager for IIS",
   "main": "dist-electron/main.js",
-  "author": "Certify Clone",
+  "author": "IIS Cert Manager",
   "license": "MIT",
   "private": true,
   "scripts": {

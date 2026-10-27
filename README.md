@@ -1,6 +1,6 @@
 # IIS Cert Manager
 
-Windows Electron app for requesting and renewing **Let's Encrypt** certificates for **IIS** sites (Certify The Web–style workflow).
+Windows Electron app for requesting and renewing **Let's Encrypt** certificates for **IIS** sites.
 
 ## Features
 
