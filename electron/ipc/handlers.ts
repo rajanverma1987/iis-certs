@@ -12,12 +12,20 @@ import type { AppSettings } from '../shared/types';
 import { assertSafeEmail, assertSafeSiteId } from '../services/validation';
 
 let busy = false;
+let getMainWindow: () => BrowserWindow | null = () => null;
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  const url = event.senderFrame?.url ?? '';
+  const win = getMainWindow();
+  // Prefer webContents identity — senderFrame.url is unreliable with sandbox/packaged builds
+  if (win && !win.isDestroyed() && event.sender.id === win.webContents.id) {
+    return;
+  }
+
+  const url = event.senderFrame?.url ?? event.sender.getURL?.() ?? '';
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   const ok =
     url.startsWith('file://') ||
+    url.startsWith('app://') ||
     (typeof devUrl === 'string' && url.startsWith(devUrl));
   if (!ok) {
     throw new Error('Blocked IPC call from untrusted renderer.');
@@ -35,6 +43,8 @@ function requireAdminWindows(): void {
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
+  getMainWindow = getWindow;
+
   ipcMain.handle('admin:getStatus', async (event) => {
     assertTrustedSender(event);
     return getAdminStatus();

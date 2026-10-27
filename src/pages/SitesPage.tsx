@@ -31,17 +31,23 @@ export function SitesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [adminStatus, appSettings, list] = await Promise.all([
+      const [adminStatus, appSettings] = await Promise.all([
         window.iisCert.getAdminStatus(),
         window.iisCert.getSettings(),
-        window.iisCert.listSites(),
       ]);
       setAdmin(adminStatus);
       setSettings(appSettings);
-      setSites(list);
-      setSelected((prev) => list.find((s) => s.id === prev?.id) ?? list[0] ?? null);
       if (!appSettings.contactEmail) {
         setSettingsOpen(true);
+      }
+
+      try {
+        const list = await window.iisCert.listSites();
+        setSites(list);
+        setSelected((prev) => list.find((s) => s.id === prev?.id) ?? list[0] ?? null);
+      } catch (listErr) {
+        setSites([]);
+        setError(listErr instanceof Error ? listErr.message : String(listErr));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -214,7 +220,12 @@ export function SitesPage() {
         onSave={async (next) => {
           const saved = await window.iisCert.setSettings(next);
           setSettings(saved);
-          await load();
+          // Refresh sites separately — a list/admin error must not undo a successful save
+          try {
+            await load();
+          } catch {
+            // load() already records UI errors
+          }
         }}
         onCheckUpdates={() => void window.iisCert.checkForUpdates()}
       />

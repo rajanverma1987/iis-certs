@@ -5,7 +5,10 @@ import os from 'os';
 import path from 'path';
 import { runPowerShell } from './powershell';
 
-/** Restrict a directory to Administrators + SYSTEM on Windows. */
+/**
+ * Harden a directory on Windows without locking out the current user profile.
+ * (AppData is already per-user; stripping that ACL broke settings saves.)
+ */
 export function lockDownDirectory(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
   if (os.platform() !== 'win32') {
@@ -18,11 +21,14 @@ export function lockDownDirectory(dir: string): void {
   }
 
   try {
+    const user = os.userInfo().username;
     execFileSync(
       'icacls',
       [
         dir,
         '/inheritance:r',
+        '/grant:r',
+        `${user}:(OI)(CI)F`,
         '/grant:r',
         'Administrators:(OI)(CI)F',
         '/grant:r',
@@ -41,9 +47,19 @@ export function secureWriteFile(filePath: string, data: Buffer | string): void {
   fs.writeFileSync(filePath, data, { mode: 0o600 });
   if (os.platform() === 'win32') {
     try {
+      const user = os.userInfo().username;
       execFileSync(
         'icacls',
-        [filePath, '/inheritance:r', '/grant:r', 'Administrators:F', '/grant:r', 'SYSTEM:F'],
+        [
+          filePath,
+          '/inheritance:r',
+          '/grant:r',
+          `${user}:F`,
+          '/grant:r',
+          'Administrators:F',
+          '/grant:r',
+          'SYSTEM:F',
+        ],
         { windowsHide: true, stdio: 'ignore' },
       );
     } catch {

@@ -1,6 +1,43 @@
 import os from 'os';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { AdminStatus } from '../shared/types';
+
+function isProcessElevated(): boolean {
+  if (os.platform() !== 'win32') return false;
+
+  // Prefer token group check — `net session` false-negatives when the Server service is disabled.
+  try {
+    const out = execFileSync('whoami', ['/groups'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    const adminSidLine = out
+      .split(/\r?\n/)
+      .find((line) => line.includes('S-1-5-32-544'));
+    if (adminSidLine) {
+      // Unelevated admins show "deny only"; elevated show "Enabled group".
+      if (/deny only/i.test(adminSidLine)) return false;
+      if (/Enabled group/i.test(adminSidLine)) return true;
+      if (/Mandatory group/i.test(adminSidLine) && !/deny only/i.test(adminSidLine)) {
+        return true;
+      }
+    }
+  } catch {
+    // fall through
+  }
+
+  try {
+    execFileSync('net', ['session'], {
+      stdio: 'ignore',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function getAdminStatus(): AdminStatus {
   const platform = os.platform();
@@ -16,14 +53,7 @@ export function getAdminStatus(): AdminStatus {
     };
   }
 
-  let isElevated = false;
-  try {
-    // Returns non-zero when not elevated
-    execSync('net session', { stdio: 'ignore', windowsHide: true });
-    isElevated = true;
-  } catch {
-    isElevated = false;
-  }
+  const isElevated = isProcessElevated();
 
   return {
     isWindows: true,
