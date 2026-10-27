@@ -131,6 +131,13 @@ export function SitesPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => void window.iisCert.checkForUpdates()}
+            className="rounded-md border border-ink-600 px-3 py-2 text-sm hover:bg-ink-800"
+          >
+            Check for update
+          </button>
+          <button
+            type="button"
             onClick={() => setSettingsOpen(true)}
             className="rounded-md border border-ink-600 px-3 py-2 text-sm hover:bg-ink-800"
           >
@@ -155,50 +162,54 @@ export function SitesPage() {
         </div>
       </header>
 
-      <main className="grid flex-1 gap-4 overflow-hidden p-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]">
-        <div className="flex min-h-0 flex-col gap-4 overflow-auto">
+      <main className="grid min-h-0 flex-1 gap-4 overflow-hidden p-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]">
+        <div className="flex min-h-0 flex-col gap-3">
           {error && (
-            <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+            <div className="shrink-0 rounded-lg border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger">
               {error}
             </div>
           )}
           {needsSetup && (
-            <div className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
+            <div className="shrink-0 rounded-lg border border-warn/40 bg-warn/10 px-4 py-2 text-sm text-warn">
               Add your Let&apos;s Encrypt contact email in Settings before requesting certificates.
             </div>
           )}
-          {loading ? (
-            <div className="rounded-xl border border-ink-700 bg-ink-900/50 px-6 py-16 text-center text-ink-400">
-              Loading IIS sites…
-            </div>
-          ) : (
-            <SiteTable
-              sites={sites}
-              selectedId={selected?.id ?? null}
-              busy={busy || needsSetup}
-              onSelect={setSelected}
-              onAction={(site) => void handleAction(site)}
-            />
-          )}
+          <div className="min-h-0 flex-1">
+            {loading ? (
+              <div className="flex h-full items-center justify-center rounded-xl border border-ink-700 bg-ink-900/50 text-ink-400">
+                Loading IIS sites…
+              </div>
+            ) : (
+              <SiteTable
+                sites={sites}
+                selectedId={selected?.id ?? null}
+                busy={busy || needsSetup}
+                onSelect={setSelected}
+                onAction={(site) => void handleAction(site)}
+              />
+            )}
+          </div>
 
           {selected && (
-            <section className="rounded-xl border border-ink-700/80 bg-ink-900/50 p-4 text-sm">
+            <section className="shrink-0 rounded-xl border border-ink-700/80 bg-ink-900/50 px-4 py-3 text-sm">
               <h3 className="font-semibold text-ink-100">{selected.name}</h3>
-              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-ink-500">Physical path</dt>
-                  <dd className="font-mono text-xs text-ink-200">{selected.physicalPath}</dd>
+                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Physical path</dt>
+                  <dd className="truncate font-mono text-xs text-ink-200" title={selected.physicalPath}>
+                    {selected.physicalPath}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-ink-500">Issuer</dt>
-                  <dd className="text-ink-200">{selected.cert.issuer || '—'}</dd>
+                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Issuer</dt>
+                  <dd className="truncate text-ink-200">{selected.cert.issuer || '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-ink-500">Subject</dt>
-                  <dd className="text-ink-200">{selected.cert.subject || '—'}</dd>
+                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Subject</dt>
+                  <dd className="truncate text-ink-200">{selected.cert.subject || '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-ink-500">Last run</dt>
+                  <dt className="text-[11px] uppercase tracking-wide text-ink-500">Last run</dt>
                   <dd className="text-ink-200">
                     {selected.lastRunAt
                       ? new Date(selected.lastRunAt).toLocaleString()
@@ -210,7 +221,9 @@ export function SitesPage() {
           )}
         </div>
 
-        <RenewProgress events={events} busy={busy} />
+        <div className="min-h-0">
+          <RenewProgress events={events} busy={busy} />
+        </div>
       </main>
 
       <SettingsForm

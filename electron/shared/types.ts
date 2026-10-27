@@ -83,7 +83,7 @@ export interface AdminStatus {
 }
 
 /** Days remaining at or below which a cert is marked Expiring. */
-export const EXPIRY_WARNING_DAYS = 90;
+export const EXPIRY_WARNING_DAYS = 7;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   contactEmail: '',

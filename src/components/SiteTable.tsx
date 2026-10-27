@@ -21,27 +21,29 @@ function formatExpiry(site: ManagedSite): string {
 export function SiteTable({ sites, selectedId, busy, onSelect, onAction }: Props) {
   if (sites.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-ink-700 bg-ink-900/40 px-6 py-16 text-center">
-        <p className="text-lg font-medium text-ink-100">No IIS sites found</p>
-        <p className="mt-2 text-sm text-ink-400">
-          Install IIS and create websites with hostname bindings, then refresh.
-        </p>
+      <div className="flex h-full min-h-0 items-center justify-center rounded-xl border border-dashed border-ink-700 bg-ink-900/40 px-6 py-10 text-center">
+        <div>
+          <p className="text-lg font-medium text-ink-100">No IIS sites found</p>
+          <p className="mt-2 text-sm text-ink-400">
+            Install IIS and create websites with hostname bindings, then refresh.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-ink-700/80 bg-ink-900/70 shadow-panel">
-      <div className="overflow-auto">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700/80 bg-ink-900/70 shadow-panel">
+      <div className="min-h-0 flex-1 overflow-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-ink-950/80 text-xs uppercase tracking-wider text-ink-400">
+          <thead className="sticky top-0 z-10 bg-ink-950 text-[11px] uppercase tracking-wider text-ink-400">
             <tr>
-              <th className="px-4 py-3 font-medium">Site</th>
-              <th className="px-4 py-3 font-medium">Hostnames</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Expires</th>
-              <th className="px-4 py-3 font-medium">Thumbprint</th>
-              <th className="px-4 py-3 font-medium text-right">Action</th>
+              <th className="px-3 py-2 font-medium">Site</th>
+              <th className="px-3 py-2 font-medium">Hostnames</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Expires</th>
+              <th className="px-3 py-2 font-medium">Thumbprint</th>
+              <th className="px-3 py-2 font-medium text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -59,19 +61,21 @@ export function SiteTable({ sites, selectedId, busy, onSelect, onAction }: Props
                     selectedId === site.id ? 'bg-ink-800/60' : ''
                   }`}
                 >
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-medium text-ink-50">{site.name}</div>
-                    <div className="mt-0.5 text-xs text-ink-400">
+                  <td className="px-3 py-1.5 align-middle">
+                    <div className="truncate font-medium leading-tight text-ink-50">
+                      {site.name}
+                    </div>
+                    <div className="truncate text-[11px] leading-tight text-ink-500" title={site.physicalPath}>
                       {site.state} · {site.physicalPath}
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-3 py-1.5 align-middle">
                     {site.hostnames.length ? (
-                      <div className="flex max-w-xs flex-wrap gap-1">
+                      <div className="flex max-w-xs flex-wrap gap-0.5">
                         {site.hostnames.map((h) => (
                           <span
                             key={h}
-                            className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-[11px] text-ink-200"
+                            className="rounded bg-ink-800 px-1 py-0 font-mono text-[10px] leading-5 text-ink-200"
                           >
                             {h}
                           </span>
@@ -81,27 +85,30 @@ export function SiteTable({ sites, selectedId, busy, onSelect, onAction }: Props
                       <span className="text-ink-500">None</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-3 py-1.5 align-middle">
                     <span
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${statusClass(site.status)}`}
+                      className={`inline-flex rounded border px-1.5 py-0 text-[11px] font-medium leading-5 ${statusClass(site.status)}`}
                     >
                       {statusLabel(site.status)}
                     </span>
                     {site.lastError && (
-                      <div className="mt-1 max-w-[220px] truncate text-xs text-danger" title={site.lastError}>
+                      <div
+                        className="mt-0.5 max-w-[200px] truncate text-[10px] text-danger"
+                        title={site.lastError}
+                      >
                         {site.lastError}
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top font-mono text-xs text-ink-300">
+                  <td className="px-3 py-1.5 align-middle font-mono text-[11px] text-ink-300">
                     {formatExpiry(site)}
                   </td>
-                  <td className="px-4 py-3 align-top font-mono text-[11px] text-ink-400">
+                  <td className="px-3 py-1.5 align-middle font-mono text-[10px] text-ink-400">
                     {site.cert.thumbprint
                       ? `${site.cert.thumbprint.slice(0, 8)}…${site.cert.thumbprint.slice(-6)}`
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 align-top text-right">
+                  <td className="px-3 py-1.5 align-middle text-right">
                     <button
                       type="button"
                       disabled={busy || !canAct}
@@ -109,7 +116,7 @@ export function SiteTable({ sites, selectedId, busy, onSelect, onAction }: Props
                         e.stopPropagation();
                         onAction(site);
                       }}
-                      className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded bg-accent px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {actionLabel(site.status)}
                     </button>

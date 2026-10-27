@@ -5,9 +5,9 @@ export function statusLabel(status: CertStatus): string {
     case 'NoCertificate':
       return 'No certificate';
     case 'Valid':
-      return 'Valid';
+      return 'All Good';
     case 'Expiring':
-      return 'Expiring soon';
+      return 'Expiring';
     case 'Expired':
       return 'Expired';
     case 'Error':

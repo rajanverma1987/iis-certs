@@ -5,7 +5,7 @@ Windows Electron app for requesting and renewing **Let's Encrypt** certificates 
 ## Features
 
 - Lists all IIS websites and hostname bindings
-- Shows certificate status: missing / valid / expiring (≤ 90 days) / expired
+- Shows certificate status: missing / All Good / Expiring (≤ 7 days) / expired
 - **Request** (no cert) or **Renew** (existing cert) per site
 - **Renew all** for eligible sites
 - HTTP-01 validation via `.well-known/acme-challenge/` files in the site physical path
