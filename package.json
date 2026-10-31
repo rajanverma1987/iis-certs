@@ -1,6 +1,6 @@
 {
   "name": "iis-cert-manager",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Let's Encrypt certificate manager for IIS",
   "main": "dist-electron/main.js",
   "author": "IIS Cert Manager",

@@ -1,4 +1,6 @@
 import fs from 'fs';
+import http from 'http';
+import https from 'https';
 import path from 'path';
 import * as acme from 'acme-client';
 import forge from 'node-forge';
@@ -21,6 +23,12 @@ export type ProgressFn = (phase: string, message: string, percent: number) => vo
 
 const ACCOUNT_KEY_FILE = 'account.key.dpapi';
 
+// Let's Encrypt often closes keep-alive sockets; reusing them hangs forever.
+acme.axios.defaults.httpAgent = new http.Agent({ keepAlive: false });
+acme.axios.defaults.httpsAgent = new https.Agent({ keepAlive: false });
+acme.axios.defaults.timeout = 30_000;
+acme.axios.defaults.headers.common['Connection'] = 'close';
+
 function accountDir(): string {
   const dir = path.join(getDataDir(), 'acme');
   lockDownDirectory(dir);
@@ -38,7 +46,6 @@ async function loadOrCreateAccountKey(): Promise<Buffer> {
     return dpapiUnprotect(protectedKey);
   }
 
-  // Migrate plaintext key if present from older builds
   const legacy = path.join(accountDir(), 'account.key');
   if (fs.existsSync(legacy)) {
     const plain = fs.readFileSync(legacy);
@@ -62,13 +69,41 @@ function challengeDir(sitePhysicalPath: string): string {
   return path.join(resolved, '.well-known', 'acme-challenge');
 }
 
-function ensureChallengeWebConfig(dir: string): void {
-  const webConfigPath = path.join(dir, 'web.config');
-  if (fs.existsSync(webConfigPath)) return;
-  const webConfig = `<?xml version="1.0" encoding="UTF-8"?>
+function writeWebConfig(filePath: string, contents: string): void {
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, contents, 'utf8');
+  }
+}
+
+function ensureChallengeWebConfigs(sitePhysicalPath: string, challengeDirectory: string): void {
+  const wellKnownDir = path.dirname(challengeDirectory);
+  fs.mkdirSync(challengeDirectory, { recursive: true });
+
+  // Allow serving under /.well-known (IIS may treat it as a hidden segment)
+  writeWebConfig(
+    path.join(wellKnownDir, 'web.config'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <security>
+      <requestFiltering>
+        <hiddenSegments>
+          <remove segment="web.config" />
+        </hiddenSegments>
+      </requestFiltering>
+    </security>
+  </system.webServer>
+</configuration>
+`,
+  );
+
+  writeWebConfig(
+    path.join(challengeDirectory, 'web.config'),
+    `<?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <system.webServer>
     <staticContent>
+      <remove fileExtension="." />
       <mimeMap fileExtension="." mimeType="text/plain" />
     </staticContent>
     <handlers>
@@ -76,17 +111,20 @@ function ensureChallengeWebConfig(dir: string): void {
       <add name="StaticFile" path="*" verb="*" modules="StaticFileModule" resourceType="Either" requireAccess="Read" />
     </handlers>
     <security>
-      <requestFiltering>
-        <fileExtensions>
+      <requestFiltering allowDoubleEscaping="false">
+        <fileExtensions allowUnlisted="true">
           <remove fileExtension="." />
           <add fileExtension="." allowed="true" />
         </fileExtensions>
+        <hiddenSegments>
+          <remove segment="web.config" />
+        </hiddenSegments>
       </requestFiltering>
     </security>
   </system.webServer>
 </configuration>
-`;
-  fs.writeFileSync(webConfigPath, webConfig, 'utf8');
+`,
+  );
 }
 
 function writeChallengeFile(
@@ -100,10 +138,8 @@ function writeChallengeFile(
   }
 
   const dir = challengeDir(sitePhysicalPath);
-  fs.mkdirSync(dir, { recursive: true });
-  ensureChallengeWebConfig(dir);
+  ensureChallengeWebConfigs(sitePhysicalPath, dir);
   const filePath = path.join(dir, safeToken);
-  // Prevent path traversal via token
   if (path.dirname(filePath) !== dir) {
     throw new Error('ACME challenge path traversal blocked.');
   }
@@ -140,6 +176,90 @@ function buildPfx(
   return Buffer.from(der, 'binary');
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function fetchChallengeBody(url: string, timeoutMs: number): Promise<{
+  status: number;
+  body: string;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { Connection: 'close', Accept: '*/*' },
+    });
+    const body = (await response.text()).trim();
+    return { status: response.status, body };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Confirm the challenge URL is reachable before asking Let's Encrypt.
+ * Fails fast with actionable errors instead of hanging on verifyChallenge.
+ */
+async function assertChallengeReachable(
+  domain: string,
+  token: string,
+  expectedBody: string,
+  onProgress: ProgressFn,
+): Promise<void> {
+  const url = `http://${domain}/.well-known/acme-challenge/${token}`;
+  onProgress('challenge', `Checking ${url}`, 48);
+
+  let lastError = '';
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const { status, body } = await fetchChallengeBody(url, 12_000);
+      if (status !== 200) {
+        lastError = `HTTP ${status} from ${url}`;
+      } else if (body !== expectedBody.trim()) {
+        lastError =
+          `Challenge file content mismatch at ${url}. IIS may not be serving the extensionless file (check web.config / static content).`;
+      } else {
+        onProgress('challenge', `Challenge URL OK for ${domain}`, 50);
+        return;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastError = msg.includes('abort')
+        ? `Timed out fetching ${url}`
+        : `Could not fetch ${url}: ${msg}`;
+    }
+    if (attempt < 3) {
+      onProgress('challenge', `Retry ${attempt}/3 — ${lastError}`, 48);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  throw new Error(
+    `${lastError}. Ensure DNS for ${domain} points to this server, Windows Firewall allows TCP 80, and IIS serves http://${domain}/.well-known/acme-challenge/`,
+  );
+}
+
 export interface IssuedCertificate {
   domains: string[];
   pfx: Buffer;
@@ -164,20 +284,35 @@ export async function issueCertificate(options: {
   const client = new acme.Client({
     directoryUrl,
     accountKey,
+    backoffAttempts: 8,
+    backoffMin: 3000,
+    backoffMax: 15000,
   });
 
   onProgress('account', 'Registering / ensuring ACME account', 10);
-  await client.createAccount({
-    termsOfServiceAgreed: true,
-    contact: [`mailto:${email}`],
-  });
+  await withTimeout(
+    client.createAccount({
+      termsOfServiceAgreed: true,
+      contact: [`mailto:${email}`],
+    }),
+    60_000,
+    'ACME account registration',
+  );
 
   onProgress('order', `Creating order for ${domains.join(', ')}`, 20);
-  const order = await client.createOrder({
-    identifiers: domains.map((domain) => ({ type: 'dns', value: domain })),
-  });
+  const order = await withTimeout(
+    client.createOrder({
+      identifiers: domains.map((domain) => ({ type: 'dns', value: domain })),
+    }),
+    60_000,
+    'ACME create order',
+  );
 
-  const authorizations = await client.getAuthorizations(order);
+  const authorizations = await withTimeout(
+    client.getAuthorizations(order),
+    60_000,
+    'ACME get authorizations',
+  );
   const challengeFiles: string[] = [];
 
   try {
@@ -186,6 +321,12 @@ export async function issueCertificate(options: {
       index += 1;
       const domain = authz.identifier.value;
       assertSafeDomainOrThrow(domain);
+
+      if (authz.status === 'valid') {
+        onProgress('challenge', `${domain} already authorized`, 55);
+        continue;
+      }
+
       const challenge = authz.challenges.find((c) => c.type === 'http-01');
       if (!challenge) {
         throw new Error(`No http-01 challenge available for ${domain}`);
@@ -202,28 +343,45 @@ export async function issueCertificate(options: {
       onProgress(
         'challenge',
         `Wrote HTTP-01 file for ${domain} → /.well-known/acme-challenge/${challenge.token}`,
-        25 + Math.floor((index / authorizations.length) * 25),
+        40,
       );
 
-      await client.verifyChallenge(authz, challenge);
-      await client.completeChallenge(challenge);
-      await client.waitForValidStatus(challenge);
+      await assertChallengeReachable(domain, challenge.token, keyAuthorization, onProgress);
+
+      onProgress('challenge', `Asking Let's Encrypt to validate ${domain}`, 52);
+      await withTimeout(
+        client.completeChallenge(challenge),
+        60_000,
+        `completeChallenge(${domain})`,
+      );
+
+      onProgress('challenge', `Waiting for Let's Encrypt validation of ${domain}…`, 55);
+      await withTimeout(
+        client.waitForValidStatus(challenge),
+        180_000,
+        `Let's Encrypt validation for ${domain}`,
+      );
+      onProgress('challenge', `${domain} validated`, 58);
     }
 
-    onProgress('csr', 'Generating CSR and finalizing order', 60);
+    onProgress('csr', 'Generating CSR and finalizing order', 65);
     const [keyPem, csrPem] = await acme.crypto.createCsr({
       commonName: domains[0],
       altNames: domains,
     });
 
-    await client.finalizeOrder(order, csrPem);
-    onProgress('download', 'Downloading issued certificate', 80);
-    const certificatePem = await client.getCertificate(order);
+    await withTimeout(client.finalizeOrder(order, csrPem), 120_000, 'finalizeOrder');
+    onProgress('download', 'Downloading issued certificate', 85);
+    const certificatePem = await withTimeout(
+      client.getCertificate(order),
+      120_000,
+      'getCertificate',
+    );
 
     const pfxPassword = generateStrongPassword(32);
     const pfx = buildPfx(keyPem.toString(), certificatePem, pfxPassword);
 
-    onProgress('issued', 'Certificate issued successfully', 90);
+    onProgress('issued', 'Certificate issued successfully', 95);
 
     return {
       domains,
